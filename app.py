@@ -1,14 +1,13 @@
 import streamlit as st
 from PyPDF2 import PdfReader
-from openai import OpenAI
 from dotenv import load_dotenv
+import google.generativeai as genai
 import os
 
 load_dotenv()
 
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 st.title("Fact Check Agent")
 
@@ -36,23 +35,17 @@ if pdf:
 
         with st.spinner("Analyzing..."):
 
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": f"""
+            response = model.generate_content(
+                f"""
 Extract factual claims from the text below.
 
 Return only bullet points.
 
 {text[:12000]}
 """
-                    }
-                ]
             )
 
-            claims = response.choices[0].message.content
+            claims = response.text
 
             st.subheader("AI Extracted Claims")
             st.write(claims)
