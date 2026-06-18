@@ -9,7 +9,15 @@ load_dotenv()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-model = genai.GenerativeModel("gemini-1.5-pro")
+models = genai.list_models()
+
+model_name = None
+for m in models:
+    if "generateContent" in m.supported_generation_methods:
+        model_name = m.name
+        break
+
+model = genai.GenerativeModel(model_name)
 
 st.set_page_config(page_title="Fact Check Agent", layout="wide")
 st.title("📄 AI Fact Check Agent (Truth + Freshness)")
