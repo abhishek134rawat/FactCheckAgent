@@ -4,17 +4,26 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 import os
 
-# Load environment variables
 load_dotenv()
 
-# Configure Gemini API
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# ✅ Stable model (works in most environments)
-model = genai.GenerativeModel("gemini-1.5-pro")
+# 🔥 FIX: dynamically pick working model
+models = genai.list_models()
+
+model_name = None
+for m in models:
+    if "generateContent" in m.supported_generation_methods:
+        model_name = m.name
+        break
+
+if model_name is None:
+    st.error("No Gemini model found")
+    st.stop()
+
+model = genai.GenerativeModel(model_name)
 
 st.title("📄 Fact Check Agent")
-
 # Upload PDF
 pdf = st.file_uploader("Upload PDF", type="pdf")
 
