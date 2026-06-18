@@ -1,9 +1,9 @@
-#  Fact-Check Agent
+# Fact-Check Agent
 
-## 🚀 Overview
+## Overview
 This AI system extracts factual claims from PDFs and verifies them using live web data.
 
-## ⚙️ Features
+## Features
 - PDF upload
 - AI-based claim extraction
 - Live web verification (DuckDuckGo)

@@ -1,6 +1,5 @@
 streamlit
 PyPDF2
 duckduckgo-search
-pandas
 python-dotenv
 google-generativeai

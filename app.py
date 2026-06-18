@@ -1,40 +1,28 @@
 import streamlit as st
 from PyPDF2 import PdfReader
-import os
 import google.generativeai as genai
+import os
 from dotenv import load_dotenv
 from duckduckgo_search import DDGS
 
 load_dotenv()
 
-# API KEY
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# Auto model selection
-models = genai.list_models()
-model_name = None
-
-for m in models:
-    if "generateContent" in m.supported_generation_methods:
-        model_name = m.name
-        break
-
-model = genai.GenerativeModel(model_name)
+model = genai.GenerativeModel("gemini-1.5-pro")
 
 st.set_page_config(page_title="Fact Check Agent", layout="wide")
-st.title("📄 The Fact-Check Agent")
-st.write("Upload PDF → Extract Claims → Verify via Web → Get Truth Score")
+st.title("📄 AI Fact Check Agent (Truth + Freshness)")
 
-# PDF Upload
 pdf = st.file_uploader("Upload PDF", type="pdf")
 
-# Web search function
+
+# 🌐 Web search
 def web_search(query):
-    results = []
     with DDGS() as ddgs:
-        for r in ddgs.text(query, max_results=3):
-            results.append(r["body"])
-    return " ".join(results)
+        results = ddgs.text(query, max_results=3)
+        return " ".join([r["body"] for r in results])
+
 
 if pdf:
 
@@ -42,61 +30,62 @@ if pdf:
     text = ""
 
     for page in reader.pages:
-        if page.extract_text():
-            text += page.extract_text()
+        text += page.extract_text() or ""
 
     st.subheader("📌 Extracted Text")
-    st.text_area("PDF Content", text, height=250)
+    st.text_area("", text, height=200)
 
-    if st.button("🚀 Run Fact Check"):
+    if st.button("🚀 Fact Check Now"):
 
-        with st.spinner("Extracting claims..."):
+        # STEP 1: Extract claims
+        claim_prompt = f"""
+Extract only factual claims (numbers, dates, stats, facts).
 
-            claim_prompt = f"""
-Extract ONLY factual claims (numbers, dates, stats, financial info) from this text:
-
+Text:
 {text[:12000]}
-
-Return as bullet points.
 """
 
-            claims = model.generate_content(claim_prompt).text
+        claims = model.generate_content(claim_prompt).text
 
-        st.subheader("📌 Extracted Claims")
+        st.subheader("📌 Claims Found")
         st.write(claims)
 
-        st.subheader("🔍 Verification Report")
+        st.subheader("🔍 Verification Results")
 
-        final_prompt = ""
-
+        # STEP 2: Check each claim
         for claim in claims.split("\n"):
 
             if claim.strip():
 
-                search_data = web_search(claim)
+                web_data = web_search(claim)
 
                 verify_prompt = f"""
-You are a strict fact checker.
+You are a strict fact-checking AI.
 
 Claim: {claim}
 
 Web Evidence:
-{search_data}
+{web_data}
 
-Classify:
-- Verified (matches real data)
-- Inaccurate (conflicts with real data)
-- False (no evidence found)
+Classify into ONLY ONE:
+1. Correct (Updated)
+2. Correct but Outdated
+3. Incorrect / False
 
-Also give short reason.
+Rules:
+- If fact matches latest info → Correct (Updated)
+- If fact is true but old → Correct but Outdated
+- If no proof or wrong → Incorrect / False
+
+Also give 1 line reason.
 """
 
-                response = model.generate_content(verify_prompt)
+                result = model.generate_content(verify_prompt).text
 
                 st.markdown("### 🧾 Claim")
                 st.write(claim)
 
-                st.markdown("### 📊 Result")
-                st.write(response.text)
+                st.markdown("### 📊 Verdict")
+                st.write(result)
 
                 st.markdown("---")
