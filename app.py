@@ -8,7 +8,6 @@ load_dotenv()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# 🔥 FIX: dynamically pick working model
 models = genai.list_models()
 
 model_name = None
@@ -18,18 +17,18 @@ for m in models:
         break
 
 if model_name is None:
-    st.error("No Gemini model found")
+    st.error("No Gemini model available")
     st.stop()
 
 model = genai.GenerativeModel(model_name)
 
-st.title("📄 Fact Check Agent")
-# Upload PDF
+st.set_page_config(page_title="Fact Check Agent", layout="wide")
+st.title("📄 Fact Check Agent (AI Powered)")
+
 pdf = st.file_uploader("Upload PDF", type="pdf")
 
 if pdf:
 
-    # Read PDF
     reader = PdfReader(pdf)
     text = ""
 
@@ -38,29 +37,31 @@ if pdf:
         if page_text:
             text += page_text
 
-    st.subheader("Extracted Text")
+    st.subheader("📌 Extracted Text")
     st.text_area("PDF Content", text, height=250)
 
-    # Button click
-    if st.button("Extract Claims with AI"):
+    if st.button("🚀 Analyze Claims"):
 
-        with st.spinner("Analyzing with Gemini AI..."):
+        with st.spinner("Analyzing with AI..."):
 
-            try:
-                response = model.generate_content(
-                    f"""
-Extract factual claims from the text below.
+            prompt = f"""
+You are a fact-checking assistant.
 
-Return only bullet points.
+Extract factual claims from the text.
 
+For each claim:
+- classify: Likely True / Needs Verification / Possibly False
+- give confidence score (0-100)
+- short reason
+
+Text:
 {text[:12000]}
 """
-                )
 
-                claims = response.text
+            response = model.generate_content(prompt)
+            output = response.text
 
-                st.subheader("AI Extracted Claims")
-                st.write(claims)
+            st.subheader("🧠 Fact Check Results")
+            st.markdown(output)
 
-            except Exception as e:
-                st.error(f"Error occurred: {e}")
+            st.success("Analysis Completed!")
