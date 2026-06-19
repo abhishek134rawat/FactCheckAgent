@@ -52,7 +52,7 @@ Return only bullet points.
         )
         claims_text = response.choices[0].message.content
         claims = claims_text.split("\n")
-        st.subheader("📌 AI Extracted Claims")
+        st.subheader("AI Extracted Claims")
         st.write(claims_text)
 # ----------------VERIFY CLAIMS ----------------
     if st.button("Verify Claims"):
