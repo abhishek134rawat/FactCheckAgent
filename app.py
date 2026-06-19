@@ -4,14 +4,17 @@ import google.generativeai as genai
 import os
 from dotenv import load_dotenv
 from duckduckgo_search import DDGS
+import time
+from google.api_core.exceptions import ResourceExhausted
 
+# Load API key
 load_dotenv()
-
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
+# Get model
 models = genai.list_models()
-
 model_name = None
+
 for m in models:
     if "generateContent" in m.supported_generation_methods:
         model_name = m.name
@@ -19,18 +22,30 @@ for m in models:
 
 model = genai.GenerativeModel(model_name)
 
+# UI setup
 st.set_page_config(page_title="Fact Check Agent", layout="wide")
-st.title("📄 AI Fact Check Agent (Truth + Freshness)")
-
-pdf = st.file_uploader("Upload PDF", type="pdf")
+st.title("📄 AI Fact Check Agent")
 
 
-# 🌐 Web search
+# ---------------- SAFE GEMINI FUNCTION ----------------
+def safe_generate(prompt):
+    try:
+        return model.generate_content(prompt).text
+    except ResourceExhausted:
+        time.sleep(2)
+        return "⚠️ API limit reached, try again later"
+
+
+# ---------------- WEB SEARCH ----------------
+@st.cache_data
 def web_search(query):
     with DDGS() as ddgs:
         results = ddgs.text(query, max_results=3)
         return " ".join([r["body"] for r in results])
 
+
+# ---------------- FILE UPLOAD ----------------
+pdf = st.file_uploader("Upload PDF", type="pdf")
 
 if pdf:
 
@@ -39,6 +54,8 @@ if pdf:
 
     for page in reader.pages:
         text += page.extract_text() or ""
+
+    text = text[:8000]  # LIMIT TEXT SIZE
 
     st.subheader("📌 Extracted Text")
     st.text_area("", text, height=200)
@@ -50,24 +67,25 @@ if pdf:
 Extract only factual claims (numbers, dates, stats, facts).
 
 Text:
-{text[:12000]}
+{text}
 """
 
-        claims = model.generate_content(claim_prompt).text
+        claims = safe_generate(claim_prompt)
 
         st.subheader("📌 Claims Found")
         st.write(claims)
 
+        # convert claims to list
+        claims_list = [c.strip("-• ") for c in claims.split("\n") if len(c.strip()) > 5]
+
         st.subheader("🔍 Verification Results")
 
-        # STEP 2: Check each claim
-        for claim in claims.split("\n"):
+        # STEP 2: check claims (LIMITED)
+        for claim in claims_list[:5]:
 
-            if claim.strip():
+            web_data = web_search(claim)
 
-                web_data = web_search(claim)
-
-                verify_prompt = f"""
+            verify_prompt = f"""
 You are a strict fact-checking AI.
 
 Claim: {claim}
@@ -80,20 +98,17 @@ Classify into ONLY ONE:
 2. Correct but Outdated
 3. Incorrect / False
 
-Rules:
-- If fact matches latest info → Correct (Updated)
-- If fact is true but old → Correct but Outdated
-- If no proof or wrong → Incorrect / False
-
 Also give 1 line reason.
 """
 
-                result = model.generate_content(verify_prompt).text
+            result = safe_generate(verify_prompt)
 
-                st.markdown("### 🧾 Claim")
-                st.write(claim)
+            st.markdown("### 🧾 Claim")
+            st.write(claim)
 
-                st.markdown("### 📊 Verdict")
-                st.write(result)
+            st.markdown("### 📊 Verdict")
+            st.write(result)
 
-                st.markdown("---")
+            st.markdown("---")
+
+            time.sleep(1)  # avoid rate limit
