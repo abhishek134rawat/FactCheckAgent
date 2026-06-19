@@ -3,3 +3,4 @@ PyPDF2
 duckduckgo-search
 python-dotenv
 google-generativeai
+openai
