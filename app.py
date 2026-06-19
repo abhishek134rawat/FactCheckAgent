@@ -1,26 +1,35 @@
 import streamlit as st
 from PyPDF2 import PdfReader
-import google.generativeai as genai
-import os
+from openai import OpenAI
+from dotenv imimport streamlit as st
+from PyPDF2 import PdfReader
+from openai import OpenAI
 from dotenv import load_dotenv
 from duckduckgo_search import DDGS
+import os
 
+# ---------------- LOAD ENV ----------------
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
-model = genai.GenerativeModel("gemini-1.5-flash")
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY")
+)
 
 st.set_page_config(page_title="Fact Check Agent", layout="wide")
-st.title("Fact Check Agent")
+st.title("📄 AI Fact Check Agent")
 
-pdf = st.file_uploader("Upload PDF", type="pdf")
 
-# 🌐 Web search
+# ---------------- WEB SEARCH ----------------
 def web_search(query):
     with DDGS() as ddgs:
         results = ddgs.text(query, max_results=3)
         return " ".join([r["body"] for r in results])
+
+
+# ---------------- UPLOAD PDF ----------------
+pdf = st.file_uploader("Upload PDF", type="pdf")
+
+claims = ""
 
 if pdf:
 
@@ -28,65 +37,138 @@ if pdf:
     text = ""
 
     for page in reader.pages:
-        text += page.extract_text() or ""
+        page_text = page.extract_text()
+        if page_text:
+            text += page_text
 
-    st.subheader("Extracted Text")
-    st.text_area("", text, height=200)
+    text = text[:12000]
 
-    if st.button("Fact Check Now"):
-        # STEP 1: Extract claims
-        claim_prompt = f""" 
-        Extract only factual claims (numbers, dates, stats, facts).
-        Text:
-        {text[:12000]}
-        """
-        try:
-            claims = model.generate_content(claim_prompt).text
-        except:
-            claims = ""
-  
-        st.subheader(" Claims Found")
+    st.subheader("📌 Extracted Text")
+    st.text_area("PDF Content", text, height=250)
+
+    # ---------------- STEP 1: EXTRACT CLAIMS ----------------
+    if st.button("Extract Claims with AI"):
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""
+Extract factual claims from this text.
+
+Return only bullet points.
+
+{text}
+"""
+                }
+            ]
+        )
+
+        claims = response.choices[0].message.content
+
+        st.subheader("📌 AI Extracted Claims")
         st.write(claims)
 
-        st.subheader("🔍 Verification Results")
 
-        # STEP 2: Check each claim
-        for claim in claims.split("\n"):
+    # ---------------- STEP 2: FACT CHECK ----------------
+    if st.button("Verify Claims"):
 
-            if claim.strip():
+        if not claims:
+            st.warning("Please extract claims first!")
+        else:
 
-                web_data = web_search(claim)
+            st.subheader("🔍 Fact Check Results")
 
-                verify_prompt = f"""
-You are a strict fact-checking AI.
+            for claim in claims.split("\n"):
+
+                claim = claim.strip()
+
+                if claim:
+
+                    web_data = web_search(claim)
+
+                    response = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": f"""
+Fact check this claim:
 
 Claim: {claim}
 
 Web Evidence:
 {web_data}
 
-Classify into ONLY ONE:
-1. Correct (Updated)
-2. Correct but Outdated
-3. Incorrect / False
-
-Rules:
-- If fact matches latest info → Correct (Updated)
-- If fact is true but old → Correct but Outdated
-- If no proof or wrong → Incorrect / False
-
-Also give 1 line reason.
+Give:
+1. Verdict (Correct / Incorrect / Outdated)
+2. 1 line reason
 """
+                            }
+                        ]
+                    )
 
-                try:
-                    result = model.generate_content(verify_prompt).text
-                except:
-                    result = "API limit reached"
+                    result = response.choices[0].message.content
 
-                st.markdown("### Claim")
-                st.write(claim)
+                    st.write("### 🧾 Claim")
+                    st.write(claim)
 
-                st.markdown("### Verdict")
-                st.write(result)
+                    st.write("### 📊 Result")
+                    st.write(result)
 
-                st.markdown("---")
+                    st.write("---")port load_dotenv
+import os
+
+load_dotenv()
+
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY")
+)
+
+st.title("Fact Check Agent")
+
+pdf = st.file_uploader(
+    "Upload PDF",
+    type="pdf"
+)
+
+if pdf:
+
+    reader = PdfReader(pdf)
+
+    text = ""
+
+    for page in reader.pages:
+        page_text = page.extract_text()
+
+        if page_text:
+            text += page_text
+
+    st.subheader("Extracted Text")
+    st.text_area("PDF Content", text, height=250)
+
+    if st.button("Extract Claims with AI"):
+
+        with st.spinner("Analyzing..."):
+
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": f"""
+Extract factual claims from the text below.
+
+Return only bullet points.
+
+{text[:12000]}
+"""
+                    }
+                ]
+            )
+
+            claims = response.choices[0].message.content
+
+            st.subheader("AI Extracted Claims")
+            st.write(claims)
