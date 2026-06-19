@@ -9,20 +9,18 @@ load_dotenv()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-model = genai.GenerativeModel("gemini-1.5-pro")
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 st.set_page_config(page_title="Fact Check Agent", layout="wide")
-st.title("📄 AI Fact Check Agent (Truth + Freshness)")
+st.title("Fact Check Agent")
 
 pdf = st.file_uploader("Upload PDF", type="pdf")
-
 
 # 🌐 Web search
 def web_search(query):
     with DDGS() as ddgs:
         results = ddgs.text(query, max_results=3)
         return " ".join([r["body"] for r in results])
-
 
 if pdf:
 
@@ -32,22 +30,22 @@ if pdf:
     for page in reader.pages:
         text += page.extract_text() or ""
 
-    st.subheader("📌 Extracted Text")
+    st.subheader("Extracted Text")
     st.text_area("", text, height=200)
 
-    if st.button("🚀 Fact Check Now"):
-
+    if st.button("Fact Check Now"):
         # STEP 1: Extract claims
-        claim_prompt = f"""
-Extract only factual claims (numbers, dates, stats, facts).
-
-Text:
-{text[:12000]}
-"""
-
-        claims = model.generate_content(claim_prompt).text
-
-        st.subheader("📌 Claims Found")
+        claim_prompt = f""" 
+        Extract only factual claims (numbers, dates, stats, facts).
+        Text:
+        {text[:12000]}
+        """
+        try:
+            claims = model.generate_content(claim_prompt).text
+        except:
+            claims = ""
+  
+        st.subheader(" Claims Found")
         st.write(claims)
 
         st.subheader("🔍 Verification Results")
@@ -80,12 +78,15 @@ Rules:
 Also give 1 line reason.
 """
 
-                result = model.generate_content(verify_prompt).text
+                try:
+                    result = model.generate_content(verify_prompt).text
+                except:
+                    result = "API limit reached"
 
-                st.markdown("### 🧾 Claim")
+                st.markdown("### Claim")
                 st.write(claim)
 
-                st.markdown("### 📊 Verdict")
+                st.markdown("### Verdict")
                 st.write(result)
 
                 st.markdown("---")
